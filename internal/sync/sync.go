@@ -9,48 +9,43 @@ import (
 
 	"github.com/sstent/garminsync-go/internal/database"
 	"github.com/sstent/garminsync-go/internal/garmin"
-	"github.com/sstent/garminsync-go/internal/models"
 	"github.com/sstent/garminsync-go/internal/parser"
 )
 
-type SyncService struct {
+type Syncer struct {
 	garminClient *garmin.Client
 	db           *database.SQLiteDB
 	dataDir      string
 }
 
-func NewSyncService(garminClient *garmin.Client, db *database.SQLiteDB, dataDir string) *SyncService {
-	return &SyncService{
+func NewSyncer(garminClient *garmin.Client, db *database.SQLiteDB, dataDir string) *Syncer {
+	return &Syncer{
 		garminClient: garminClient,
 		db:           db,
 		dataDir:      dataDir,
 	}
 }
 
-func (s *SyncService) Sync(ctx context.Context) error {
-	startTime := time.Now()
-	fmt.Printf("Starting sync at %s\n", startTime.Format(time.RFC3339))
-	defer func() {
-		fmt.Printf("Sync completed in %s\n", time.Since(startTime))
-	}()
+func (s *Syncer) FullSync(ctx context.Context) error {
+	fmt.Println("Starting full sync...")
+	defer fmt.Println("Sync completed")
 
-	// 1. Fetch latest activities from Garmin
+	// 1. Fetch activities from Garmin
 	activities, err := s.garminClient.GetActivities(0, 100)
 	if err != nil {
 		return fmt.Errorf("failed to get activities: %w", err)
 	}
-	fmt.Printf("Found %d activities on Garmin\n", len(activities))
+	fmt.Printf("Found %d activities\n", len(activities))
 
-	// 2. Sync each activity
-	for i, activity := range activities {
+	// 2. Process each activity
+	for _, activity := range activities {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			fmt.Printf("[%d/%d] Processing activity %d...\n", i+1, len(activities), activity.ActivityID)
+			fmt.Printf("Processing activity %d...\n", activity.ActivityID)
 			if err := s.syncActivity(&activity); err != nil {
-				fmt.Printf("Error syncing activity %d: %v\n", activity.ActivityID, err)
-				// Continue with next activity on error
+				fmt.Printf("Error syncing activity: %v\n", err)
 			}
 		}
 	}
@@ -58,103 +53,67 @@ func (s *SyncService) Sync(ctx context.Context) error {
 	return nil
 }
 
-func (s *SyncService) syncActivity(activity *garmin.GarminActivity) error {
-	// Check if activity exists in database
-	dbActivity, err := s.db.GetActivity(activity.ActivityID)
-	if err == nil {
-		// Activity exists - check if already downloaded
-		if dbActivity.Downloaded {
-			fmt.Printf("Activity %d already downloaded\n", activity.ActivityID)
-			return nil
-		}
-	} else {
-		// Activity not in database - create new record
-		dbActivity = &database.Activity{
-			ActivityID: activity.ActivityID,
-			StartTime:  parseTime(activity.StartTimeLocal),
-		}
-		
-		// Add basic info if available
-		if activityType, ok := activity.ActivityType["typeKey"]; ok {
-			dbActivity.ActivityType = activityType.(string)
-		}
-		dbActivity.Duration = int(activity.Duration)
-		dbActivity.Distance = activity.Distance
-		
-		if err := s.db.CreateActivity(dbActivity); err != nil {
-			return fmt.Errorf("failed to create activity: %w", err)
-		}
+func (s *Syncer) syncActivity(activity *garmin.GarminActivity) error {
+	// Skip if already downloaded
+	if exists, _ := s.db.ActivityExists(activity.ActivityID); exists {
+		return nil
 	}
 
 	// Download the activity file (FIT format)
 	fileData, err := s.garminClient.DownloadActivity(activity.ActivityID, "fit")
 	if err != nil {
-		return fmt.Errorf("failed to download activity: %w", err)
-	}
-
-	// Determine filename
-	filename := filepath.Join(
-		s.dataDir,
-		"activities",
-		fmt.Sprintf("%d_%s.fit", activity.ActivityID, activity.StartTimeLocal[:10]),
-	)
-
-	// Create directories if needed
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+		return fmt.Errorf("download failed: %w", err)
 	}
 
 	// Save file
+	filename := filepath.Join(s.dataDir, "activities", fmt.Sprintf("%d.fit", activity.ActivityID))
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		return fmt.Errorf("directory creation failed: %w", err)
+	}
 	if err := os.WriteFile(filename, fileData, 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
+		return fmt.Errorf("file write failed: %w", err)
 	}
 
-	// Parse the file to extract additional metrics
-	metrics, err := s.parseActivityFile(fileData, "fit")
+	// Parse the file
+	fileParser := parser.NewParser()
+	metrics, err := fileParser.ParseData(fileData)
 	if err != nil {
-		return fmt.Errorf("failed to parse activity file: %w", err)
+		return fmt.Errorf("parsing failed: %w", err)
 	}
 
-	// Update activity with parsed metrics
-	dbActivity.Duration = int(metrics.Duration.Seconds())
-	dbActivity.Distance = metrics.Distance
-	dbActivity.MaxHeartRate = metrics.MaxHeartRate
-	dbActivity.AvgHeartRate = metrics.AvgHeartRate
-	dbActivity.AvgPower = metrics.AvgPower
-	dbActivity.Calories = metrics.Calories
-	dbActivity.Downloaded = true
-	dbActivity.Filename = filename
-	dbActivity.FileType = "fit"
-
-	// Save updated activity
-	if err := s.db.UpdateActivity(dbActivity); err != nil {
-		return fmt.Errorf("failed to update activity: %w", err)
+	// Parse start time
+	startTime, err := time.Parse("2006-01-02 15:04:05", activity.StartTimeLocal)
+	if err != nil {
+		startTime = time.Now()
 	}
 
-	fmt.Printf("Successfully synced activity %d\n", activity.ActivityID)
+	// Save to database
+	if err := s.db.CreateActivity(&database.Activity{
+		ActivityID:    activity.ActivityID,
+		StartTime:     startTime,
+		ActivityType:  getActivityType(activity),
+		Distance:      metrics.Distance,
+		Duration:      int(metrics.Duration.Seconds()),
+		MaxHeartRate:  metrics.MaxHeartRate,
+		AvgHeartRate:  metrics.AvgHeartRate,
+		AvgPower:      float64(metrics.AvgPower),
+		Calories:      metrics.Calories,
+		Filename:      filename,
+		FileType:      "fit",
+		Downloaded:    true,
+		ElevationGain: metrics.ElevationGain,
+		Steps:         metrics.Steps,
+	}); err != nil {
+		return fmt.Errorf("database error: %w", err)
+	}
+
+	fmt.Printf("Synced activity %d\n", activity.ActivityID)
 	return nil
 }
 
-func (s *SyncService) parseActivityFile(fileData []byte, fileType string) (*models.ActivityMetrics, error) {
-	switch fileType {
-	case "fit":
-		return parser.ParseFITData(fileData)
-	case "tcx":
-		// TODO: Implement TCX parsing
-		return nil, fmt.Errorf("TCX parsing not implemented yet")
-	case "gpx":
-		// TODO: Implement GPX parsing
-		return nil, fmt.Errorf("GPX parsing not implemented yet")
-	default:
-		return nil, fmt.Errorf("unsupported file type: %s", fileType)
+func getActivityType(activity *garmin.GarminActivity) string {
+	if activityType, ok := activity.ActivityType["typeKey"]; ok {
+		return activityType.(string)
 	}
-}
-
-func parseTime(timeStr string) time.Time {
-	// Garmin time format: "2023-08-15 12:30:45"
-	t, err := time.Parse("2006-01-02 15:04:05", timeStr)
-	if err != nil {
-		return time.Now()
-	}
-	return t
+	return "unknown"
 }

@@ -1,103 +1,89 @@
 package web
 
 import (
+	"context"
 	"net/http"
-	"html/template"
-	"path/filepath"
-	"os"
+	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/sstent/garminsync-go/internal/database"
+	"github.com/sstent/garminsync-go/internal/garmin"
+	"github.com/sstent/garminsync-go/internal/sync"
 )
 
 type WebHandler struct {
-	db *database.SQLiteDB
-	templates map[string]*template.Template
+	db       *database.SQLiteDB
+	syncer   *sync.Syncer
+	garmin   *garmin.Client
+	templates map[string]interface{} // Placeholder for template handling
 }
 
-func NewWebHandler(db *database.SQLiteDB) *WebHandler {
+func NewWebHandler(db *database.SQLiteDB, syncer *sync.Syncer, garmin *garmin.Client) *WebHandler {
 	return &WebHandler{
-		db: db,
-		templates: make(map[string]*template.Template),
+		db:       db,
+		syncer:   syncer,
+		garmin:   garmin,
+		templates: make(map[string]interface{}),
 	}
 }
 
-func (h *WebHandler) LoadTemplates(templateDir string) error {
-	layouts, err := filepath.Glob(filepath.Join(templateDir, "layouts", "*.html"))
-	if err != nil {
-		return err
-	}
-
-	partials, err := filepath.Glob(filepath.Join(templateDir, "partials", "*.html"))
-	if err != nil {
-		return err
-	}
-
-	pages, err := filepath.Glob(filepath.Join(templateDir, "pages", "*.html"))
-	if err != nil {
-		return err
-	}
-
-	for _, page := range pages {
-		name := filepath.Base(page)
-		
-		files := append([]string{page}, layouts...)
-		files = append(files, partials...)
-		
-		h.templates[name], err = template.ParseFiles(files...)
-		if err != nil {
-			return err
-		}
-	}
-	
-	return nil
+func (h *WebHandler) RegisterRoutes(router *gin.Engine) {
+	router.GET("/", h.Index)
+	router.GET("/activities", h.ActivityList)
+	router.GET("/activities/:id", h.ActivityDetail)
+	router.POST("/sync", h.Sync)
 }
 
-func (h *WebHandler) Index(w http.ResponseWriter, r *http.Request) {
+func (h *WebHandler) Index(c *gin.Context) {
 	stats, err := h.db.GetStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-
-	h.renderTemplate(w, "index.html", stats)
+	
+	// Placeholder for template rendering
+	c.JSON(http.StatusOK, stats)
 }
 
-func (h *WebHandler) ActivityList(w http.ResponseWriter, r *http.Request) {
-	activities, err := h.db.GetActivities(50, 0)
+func (h *WebHandler) ActivityList(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+	
+	if limit <= 0 {
+		limit = 50
+	}
+	
+	activities, err := h.db.GetActivities(limit, offset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-
-	h.renderTemplate(w, "activity_list.html", activities)
+	
+	c.JSON(http.StatusOK, activities)
 }
 
-func (h *WebHandler) ActivityDetail(w http.ResponseWriter, r *http.Request) {
-	// Extract activity ID from URL params
-	activityID, err := strconv.Atoi(r.URL.Query().Get("id"))
+func (h *WebHandler) ActivityDetail(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		http.Error(w, "Invalid activity ID", http.StatusBadRequest)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-
-	activity, err := h.db.GetActivity(activityID)
+	
+	activity, err := h.db.GetActivity(id)
 	if err != nil {
-		http.Error(w, "Activity not found", http.StatusNotFound)
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-
-	h.renderTemplate(w, "activity_detail.html", activity)
+	
+	c.JSON(http.StatusOK, activity)
 }
 
-func (h *WebHandler) renderTemplate(w http.ResponseWriter, name string, data interface{}) {
-	tmpl, ok := h.templates[name]
-	if !ok {
-		http.Error(w, "Template not found", http.StatusInternalServerError)
+func (h *WebHandler) Sync(c *gin.Context) {
+	err := h.syncer.FullSync(context.Background())
+	if err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	
+	c.Status(http.StatusOK)
 }

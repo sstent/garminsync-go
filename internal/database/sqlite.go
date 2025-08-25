@@ -124,6 +124,16 @@ func (s *SQLiteDB) GetActivities(limit, offset int) ([]Activity, error) {
     return activities, nil
 }
 
+func (s *SQLiteDB) ActivityExists(activityID int) (bool, error) {
+	query := `SELECT COUNT(*) FROM activities WHERE activity_id = ?`
+	var count int
+	err := s.db.QueryRow(query, activityID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (s *SQLiteDB) GetActivity(activityID int) (*Activity, error) {
     query := `
     SELECT id, activity_id, start_time, activity_type, duration, distance, 

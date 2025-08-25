@@ -2,8 +2,7 @@
 package database
 
 import (
-    "database/sql"
-    "time"
+	"time"
 )
 
 type Activity struct {

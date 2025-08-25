@@ -2,16 +2,14 @@
 package garmin
 
 import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "io"
-    "net/http"
-    "net/url"
-    "os"
-    "strconv"
-    "strings"
-    "time"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"time"
 )
 
 type Client struct {
