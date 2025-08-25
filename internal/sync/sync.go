@@ -110,7 +110,7 @@ func (s *SyncService) syncActivity(activity *garmin.GarminActivity) error {
 	}
 
 	// Parse the file to extract additional metrics
-	metrics, err := parser.NewFITParser().ParseData(fileData)
+	metrics, err := parser.ParseFITData(fileData)
 	if err != nil {
 		return fmt.Errorf("failed to parse activity file: %w", err)
 	}
