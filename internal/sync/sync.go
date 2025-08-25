@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/yourusername/garminsync/internal/database"
-	"github.com/yourusername/garminsync/internal/garmin"
-	"github.com/yourusername/garminsync/internal/parser"
+	"github.com/sstent/garminsync-go/internal/database"
+	"github.com/sstent/garminsync-go/internal/garmin"
+	"github.com/sstent/garminsync-go/internal/parser"
 )
 
 type SyncService struct {

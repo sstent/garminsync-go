@@ -15,10 +15,10 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/yourusername/garminsync/internal/database"
-	"github.com/yourusername/garminsync/internal/garmin"
-	"github.com/yourusername/garminsync/internal/sync"
-	"github.com/yourusername/garminsync/internal/web"
+	"github.com/sstent/garminsync-go/internal/database"
+	"github.com/sstent/garminsync-go/internal/garmin"
+	"github.com/sstent/garminsync-go/internal/sync"
+	"github.com/sstent/garminsync-go/internal/web"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/robfig/cron/v3"

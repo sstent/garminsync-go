@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"os"
 
-	"github.com/yourusername/garminsync/internal/database"
+	"github.com/sstent/garminsync-go/internal/database"
 )
 
 type WebHandler struct {
