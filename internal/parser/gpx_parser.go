@@ -5,7 +5,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/sstent/garminsync-go/internal/parser"
+	"github.com/sstent/garminsync-go/internal/models"
+	"os"
 )
 
 // GPX represents the root element of a GPX file
@@ -36,7 +37,13 @@ type TrkPt struct {
 // GPXParser implements the Parser interface for GPX files
 type GPXParser struct{}
 
-func (p *GPXParser) Parse(data []byte) (*activity.Activity, error) {
+func (p *GPXParser) ParseFile(filename string) (*models.ActivityMetrics, error) {
+	// Read the file content
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
 	var gpx GPX
 	if err := xml.Unmarshal(data, &gpx); err != nil {
 		return nil, err
@@ -51,13 +58,12 @@ func (p *GPXParser) Parse(data []byte) (*activity.Activity, error) {
 	startTime, _ := time.Parse(time.RFC3339, points[0].Time)
 	endTime, _ := time.Parse(time.RFC3339, points[len(points)-1].Time)
 	
-	activity := &activity.Activity{
-		ActivityType:  "hiking",
-		StartTime:     startTime,
-		Duration:      int(endTime.Sub(startTime).Seconds()),
-		StartLatitude: points[0].Lat,
-		StartLongitude: points[0].Lon,
+	metrics := &models.ActivityMetrics{
+		ActivityType: "hiking",
+		StartTime:    startTime,
+		Duration:     time.Duration(endTime.Sub(startTime).Seconds()) * time.Second,
 	}
+
 
 	// Calculate distance and elevation
 	var totalDistance, elevationGain float64
@@ -73,11 +79,12 @@ func (p *GPXParser) Parse(data []byte) (*activity.Activity, error) {
 		prev = curr
 	}
 
-	activity.Distance = totalDistance
-	activity.ElevationGain = elevationGain
+	metrics.Distance = totalDistance
+	metrics.ElevationGain = elevationGain
 
-	return activity, nil
+	return metrics, nil
 }
+
 
 // haversine calculates the distance between two points on Earth
 func haversine(lat1, lon1, lat2, lon2 float64) float64 {
