@@ -13,18 +13,23 @@ import (
 
 type WebHandler struct {
 	db       *database.SQLiteDB
-	syncer   *sync.Syncer
+	syncer   *sync.SyncService
 	garmin   *garmin.Client
 	templates map[string]interface{} // Placeholder for template handling
 }
 
-func NewWebHandler(db *database.SQLiteDB, syncer *sync.Syncer, garmin *garmin.Client) *WebHandler {
+func NewWebHandler(db *database.SQLiteDB, syncer *sync.SyncService, garmin *garmin.Client) *WebHandler {
 	return &WebHandler{
 		db:       db,
 		syncer:   syncer,
 		garmin:   garmin,
 		templates: make(map[string]interface{}),
 	}
+}
+
+func (h *WebHandler) LoadTemplates(templateDir string) error {
+	// For now, just return nil - templates will be handled later
+	return nil
 }
 
 func (h *WebHandler) RegisterRoutes(router *gin.Engine) {
@@ -79,7 +84,7 @@ func (h *WebHandler) ActivityDetail(c *gin.Context) {
 }
 
 func (h *WebHandler) Sync(c *gin.Context) {
-	err := h.syncer.FullSync(context.Background())
+	err := h.syncer.Sync(context.Background())
 	if err != nil {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return

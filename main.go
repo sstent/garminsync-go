@@ -21,6 +21,7 @@ import (
 	"github.com/sstent/garminsync-go/internal/web"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 )
 
@@ -30,7 +31,7 @@ type App struct {
 	server     *http.Server
 	garmin     *garmin.Client
 	shutdown   chan os.Signal
-	syncService *sync.SyncService
+	syncService *sync.SyncService  // This should now work
 }
 
 func main() {
@@ -63,11 +64,10 @@ func (app *App) init() error {
 	var err error
 
 	// Initialize database
-	dbConn, err := initDatabase()
+	app.db, err = initDatabase()
 	if err != nil {
 		return err
 	}
-	app.db = database.NewSQLiteDBFromDB(dbConn)
 
 	// Initialize Garmin client
 	app.garmin = garmin.NewClient()
@@ -77,13 +77,13 @@ func (app *App) init() error {
 	if dataDir == "" {
 		dataDir = "./data"
 	}
-	app.syncService = sync.NewSyncService(app.garmin, database.NewSQLiteDBFromDB(app.db), dataDir)
+	app.syncService = sync.NewSyncService(app.garmin, app.db, dataDir)
 
 	// Setup cron scheduler
 	app.cron = cron.New()
 
 	// Setup HTTP server
-	webHandler := web.NewWebHandler(app.db)
+	webHandler := web.NewWebHandler(app.db, app.syncService, app.garmin)
 	templateDir := os.Getenv("TEMPLATE_DIR")
 	if templateDir == "" {
 		templateDir = "./internal/web/templates"
@@ -142,7 +142,7 @@ func (app *App) stop() {
 }
 
 // Database initialization
-func initDatabase() (*sql.DB, error) {
+func initDatabase() (*database.SQLiteDB, error) {
 	// Get database path from environment or use default
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
@@ -172,28 +172,24 @@ func initDatabase() (*sql.DB, error) {
 	}
 	
 	// Create tables if they don't exist
-	sqliteDB := &database.SQLiteDB{db: db}
-	if err := sqliteDB.createTables(); err != nil {
+	sqliteDB := database.NewSQLiteDBFromDB(db)
+	if err := sqliteDB.CreateTables(); err != nil {
 		return nil, fmt.Errorf("failed to create tables: %v", err)
 	}
 
-	return db, nil
+	return sqliteDB, nil
 }
 
-// Application routes
-func (app *App) setupRoutes(webHandler *web.WebHandler) *http.ServeMux {
-	mux := http.NewServeMux()
+func (app *App) setupRoutes(webHandler *web.WebHandler) http.Handler {
+	router := gin.Default()
 	
 	// Health check
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+	router.GET("/health", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
 	})
 	
-	// Web UI routes
-	mux.HandleFunc("/", webHandler.Index)
-	mux.HandleFunc("/activities", webHandler.ActivityList)
-	mux.HandleFunc("/activity", webHandler.ActivityDetail)
+	// Register web routes
+	webHandler.RegisterRoutes(router)
 	
-	return mux
+	return router
 }

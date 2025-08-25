@@ -156,15 +156,20 @@ func (c *Client) GetActivities(start, limit int) ([]GarminActivity, error) {
         return nil, fmt.Errorf("failed to get activities: status %d", resp.StatusCode)
     }
     
-    var activities []GarminActivity
-    if err := json.NewDecoder(resp.Body).Decode(&activities); err != nil {
+    // Garmin API returns an object containing the activity list
+    type responseStruct struct {
+        ActivityList []GarminActivity `json:"activityList"`
+    }
+    var response responseStruct
+    
+    if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
         return nil, err
     }
     
     // Rate limiting
     time.Sleep(2 * time.Second)
     
-    return activities, nil
+    return response.ActivityList, nil
 }
 
 func (c *Client) DownloadActivity(activityID int, format string) ([]byte, error) {

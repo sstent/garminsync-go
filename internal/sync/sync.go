@@ -12,21 +12,21 @@ import (
 	"github.com/sstent/garminsync-go/internal/parser"
 )
 
-type Syncer struct {
+type SyncService struct {
 	garminClient *garmin.Client
 	db           *database.SQLiteDB
 	dataDir      string
 }
 
-func NewSyncer(garminClient *garmin.Client, db *database.SQLiteDB, dataDir string) *Syncer {
-	return &Syncer{
+func NewSyncService(garminClient *garmin.Client, db *database.SQLiteDB, dataDir string) *SyncService {
+	return &SyncService{
 		garminClient: garminClient,
 		db:           db,
 		dataDir:      dataDir,
 	}
 }
 
-func (s *Syncer) FullSync(ctx context.Context) error {
+func (s *SyncService) FullSync(ctx context.Context) error {
 	fmt.Println("Starting full sync...")
 	defer fmt.Println("Sync completed")
 
@@ -53,7 +53,7 @@ func (s *Syncer) FullSync(ctx context.Context) error {
 	return nil
 }
 
-func (s *Syncer) syncActivity(activity *garmin.GarminActivity) error {
+func (s *SyncService) syncActivity(activity *garmin.GarminActivity) error {
 	// Skip if already downloaded
 	if exists, _ := s.db.ActivityExists(activity.ActivityID); exists {
 		return nil
@@ -109,6 +109,11 @@ func (s *Syncer) syncActivity(activity *garmin.GarminActivity) error {
 
 	fmt.Printf("Synced activity %d\n", activity.ActivityID)
 	return nil
+}
+
+// Add missing Sync method
+func (s *SyncService) Sync(ctx context.Context) error {
+    return s.FullSync(ctx)
 }
 
 func getActivityType(activity *garmin.GarminActivity) string {

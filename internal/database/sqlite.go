@@ -20,15 +20,15 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
     
     sqlite := &SQLiteDB{db: db}
     
-    // Create tables
-    if err := sqlite.createTables(); err != nil {
-        return nil, err
-    }
+	// Create tables
+	if err := sqlite.CreateTables(); err != nil {
+		return nil, err
+	}
     
     return sqlite, nil
 }
 
-func (s *SQLiteDB) createTables() error {
+func (s *SQLiteDB) CreateTables() error {
     schema := `
 	CREATE TABLE IF NOT EXISTS activities (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,6 +132,10 @@ func (s *SQLiteDB) ActivityExists(activityID int) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (s *SQLiteDB) DB() *sql.DB {
+	return s.db
 }
 
 func (s *SQLiteDB) GetActivity(activityID int) (*Activity, error) {
