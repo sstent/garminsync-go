@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tormoder/fit"
+	"github.com/sstent/garminsync-go/internal/models"
 )
 
 type FITParser struct{}
@@ -15,7 +16,7 @@ func NewFITParser() *FITParser {
 	return &FITParser{}
 }
 
-func (p *FITParser) ParseFile(filename string) (*ActivityMetrics, error) {
+func (p *FITParser) ParseFile(filename string) (*models.ActivityMetrics, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -30,7 +31,7 @@ func (p *FITParser) ParseFile(filename string) (*ActivityMetrics, error) {
 	return p.ParseData(data)
 }
 
-func (p *FITParser) ParseData(data []byte) (*ActivityMetrics, error) {
+func (p *FITParser) ParseData(data []byte) (*models.ActivityMetrics, error) {
 	fitFile, err := fit.Decode(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode FIT file: %w", err)
@@ -46,7 +47,7 @@ func (p *FITParser) ParseData(data []byte) (*ActivityMetrics, error) {
 	}
 
 	session := activity.Sessions[0]
-	metrics := &ActivityMetrics{}
+	metrics := &models.ActivityMetrics{}
 
 	// Basic activity metrics
 	metrics.StartTime = session.StartTime

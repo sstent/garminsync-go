@@ -1,28 +1,16 @@
 package parser
 
-import "time"
+import (
+	"time"
+	
+	"github.com/sstent/garminsync-go/internal/models"
+)
 
-// ActivityMetrics contains all metrics extracted from activity files
-type ActivityMetrics struct {
-	ActivityType   string
-	StartTime      time.Time
-	Duration       time.Duration
-	Distance       float64 // in meters
-	MaxHeartRate   int
-	AvgHeartRate   int
-	AvgPower       int
-	Calories       int
-	Steps          int
-	ElevationGain  float64 // in meters
-	ElevationLoss  float64 // in meters
-	MinTemperature float64 // in °C
-	MaxTemperature float64 // in °C
-	AvgTemperature float64 // in °C
-}
+// ActivityMetrics is now defined in internal/models
 
 // Parser defines the interface for activity file parsers
 type Parser interface {
-	ParseFile(filename string) (*ActivityMetrics, error)
+	ParseFile(filename string) (*models.ActivityMetrics, error)
 }
 
 // FileType represents supported file formats

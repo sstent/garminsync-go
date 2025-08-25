@@ -3,13 +3,13 @@ package sync
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/sstent/garminsync-go/internal/database"
 	"github.com/sstent/garminsync-go/internal/garmin"
+	"github.com/sstent/garminsync-go/internal/models"
 	"github.com/sstent/garminsync-go/internal/parser"
 )
 
@@ -110,7 +110,7 @@ func (s *SyncService) syncActivity(activity *garmin.GarminActivity) error {
 	}
 
 	// Parse the file to extract additional metrics
-	metrics, err := parser.ParseFITData(fileData)
+	metrics, err := s.parseActivityFile(fileData, "fit")
 	if err != nil {
 		return fmt.Errorf("failed to parse activity file: %w", err)
 	}
@@ -133,6 +133,21 @@ func (s *SyncService) syncActivity(activity *garmin.GarminActivity) error {
 
 	fmt.Printf("Successfully synced activity %d\n", activity.ActivityID)
 	return nil
+}
+
+func (s *SyncService) parseActivityFile(fileData []byte, fileType string) (*models.ActivityMetrics, error) {
+	switch fileType {
+	case "fit":
+		return parser.ParseFITData(fileData)
+	case "tcx":
+		// TODO: Implement TCX parsing
+		return nil, fmt.Errorf("TCX parsing not implemented yet")
+	case "gpx":
+		// TODO: Implement GPX parsing
+		return nil, fmt.Errorf("GPX parsing not implemented yet")
+	default:
+		return nil, fmt.Errorf("unsupported file type: %s", fileType)
+	}
 }
 
 func parseTime(timeStr string) time.Time {
