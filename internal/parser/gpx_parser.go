@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/sstent/garminsync-go/internal/parser/activity/activity"
+	"github.com/sstent/garminsync-go/internal/parser/activity/activity/activity/activity"
 )
 
 // GPX represents the root element of a GPX file
