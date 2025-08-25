@@ -7,22 +7,26 @@ import (
 )
 
 type Activity struct {
-    ID            int       `json:"id"`
-    ActivityID    int       `json:"activity_id"`
-    StartTime     time.Time `json:"start_time"`
-    ActivityType  string    `json:"activity_type"`
-    Duration      int       `json:"duration"`          // seconds
-    Distance      float64   `json:"distance"`          // meters
-    MaxHeartRate  int       `json:"max_heart_rate"`
-    AvgHeartRate  int       `json:"avg_heart_rate"`
-    AvgPower      float64   `json:"avg_power"`
-    Calories      int       `json:"calories"`
-    Filename      string    `json:"filename"`
-    FileType      string    `json:"file_type"`
-    FileSize      int64     `json:"file_size"`
-    Downloaded    bool      `json:"downloaded"`
-    CreatedAt     time.Time `json:"created_at"`
-    LastSync      time.Time `json:"last_sync"`
+	ID           int       `json:"id"`
+	ActivityID   int       `json:"activity_id"`
+	StartTime    time.Time `json:"start_time"`
+	ActivityType string    `json:"activity_type"`
+	Duration     int       `json:"duration"`      // in seconds
+	Distance     float64   `json:"distance"`      // in meters
+	MaxHeartRate int       `json:"max_heart_rate"`
+	AvgHeartRate int       `json:"avg_heart_rate"`
+	AvgPower     float64   `json:"avg_power"`
+	Calories     int       `json:"calories"`
+	Steps        int       `json:"steps"`
+	ElevationGain float64  `json:"elevation_gain"`
+	StartLatitude float64  `json:"start_latitude"`
+	StartLongitude float64 `json:"start_longitude"`
+	Filename     string    `json:"filename"`
+	FileType     string    `json:"file_type"`
+	FileSize     int64     `json:"file_size"`
+	Downloaded   bool      `json:"downloaded"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastSync     time.Time `json:"last_sync"`
 }
 
 type Stats struct {

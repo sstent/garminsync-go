@@ -1,0 +1,27 @@
+{{define "title"}}Activities{{end}}
+
+{{define "content"}}
+<article>
+    <header>
+        <h1>Activity List</h1>
+        <div class="grid">
+            <form method="get">
+                <input type="search" name="q" placeholder="Search activities..." 
+                    hx-get="/activities" hx-trigger="keyup changed delay:500ms" 
+                    hx-target="#activity-list" hx-include="this">
+            </form>
+            <select name="type" hx-get="/activities" hx-trigger="change" 
+                hx-target="#activity-list" hx-include="previous input">
+                <option value="">All Types</option>
+                <option value="running">Running</option>
+                <option value="cycling">Cycling</option>
+                <option value="swimming">Swimming</option>
+            </select>
+        </div>
+    </header>
+
+    <div id="activity-list" hx-get="/partials/activities" hx-trigger="load">
+        Loading activities...
+    </div>
+</article>
+{{end}}

@@ -30,24 +30,28 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 
 func (s *SQLiteDB) createTables() error {
     schema := `
-    CREATE TABLE IF NOT EXISTS activities (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        activity_id INTEGER UNIQUE NOT NULL,
-        start_time DATETIME NOT NULL,
-        activity_type TEXT,
-        duration INTEGER,
-        distance REAL,
-        max_heart_rate INTEGER,
-        avg_heart_rate INTEGER,
-        avg_power REAL,
-        calories INTEGER,
-        filename TEXT UNIQUE,
-        file_type TEXT,
-        file_size INTEGER,
-        downloaded BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_sync DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+	CREATE TABLE IF NOT EXISTS activities (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		activity_id INTEGER UNIQUE NOT NULL,
+		start_time DATETIME NOT NULL,
+		activity_type TEXT,
+		duration INTEGER,
+		distance REAL,
+		max_heart_rate INTEGER,
+		avg_heart_rate INTEGER,
+		avg_power REAL,
+		calories INTEGER,
+		steps INTEGER,
+		elevation_gain REAL,
+		start_latitude REAL,
+		start_longitude REAL,
+		filename TEXT UNIQUE,
+		file_type TEXT,
+		file_size INTEGER,
+		downloaded BOOLEAN DEFAULT FALSE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_sync DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
     
     CREATE INDEX IF NOT EXISTS idx_activities_activity_id ON activities(activity_id);
     CREATE INDEX IF NOT EXISTS idx_activities_start_time ON activities(start_time);
@@ -73,8 +77,9 @@ func (s *SQLiteDB) createTables() error {
 func (s *SQLiteDB) GetActivities(limit, offset int) ([]Activity, error) {
     query := `
     SELECT id, activity_id, start_time, activity_type, duration, distance, 
-           max_heart_rate, avg_heart_rate, avg_power, calories, filename, 
-           file_type, file_size, downloaded, created_at, last_sync
+           max_heart_rate, avg_heart_rate, avg_power, calories, steps, 
+           elevation_gain, start_latitude, start_longitude,
+           filename, file_type, file_size, downloaded, created_at, last_sync
     FROM activities 
     ORDER BY start_time DESC 
     LIMIT ? OFFSET ?`
@@ -93,8 +98,10 @@ func (s *SQLiteDB) GetActivities(limit, offset int) ([]Activity, error) {
         err := rows.Scan(
             &a.ID, &a.ActivityID, &startTime, &a.ActivityType,
             &a.Duration, &a.Distance, &a.MaxHeartRate, &a.AvgHeartRate,
-            &a.AvgPower, &a.Calories, &a.Filename, &a.FileType,
-            &a.FileSize, &a.Downloaded, &createdAt, &lastSync,
+            &a.AvgPower, &a.Calories, &a.Steps, &a.ElevationGain,
+            &a.StartLatitude, &a.StartLongitude,
+            &a.Filename, &a.FileType, &a.FileSize, &a.Downloaded,
+            &createdAt, &lastSync,
         )
         if err != nil {
             return nil, err
@@ -117,39 +124,89 @@ func (s *SQLiteDB) GetActivities(limit, offset int) ([]Activity, error) {
     return activities, nil
 }
 
-func (s *SQLiteDB) CreateActivity(activity *Activity) error {
+func (s *SQLiteDB) GetActivity(activityID int) (*Activity, error) {
     query := `
-    INSERT INTO activities (
-        activity_id, start_time, activity_type, duration, distance,
-        max_heart_rate, avg_heart_rate, avg_power, calories,
-        filename, file_type, file_size, downloaded
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    SELECT id, activity_id, start_time, activity_type, duration, distance, 
+           max_heart_rate, avg_heart_rate, avg_power, calories, steps, 
+           elevation_gain, start_latitude, start_longitude,
+           filename, file_type, file_size, downloaded, created_at, last_sync
+    FROM activities 
+    WHERE activity_id = ?`
+    
+    row := s.db.QueryRow(query, activityID)
+    
+    var a Activity
+    var startTime, createdAt, lastSync string
+    
+    err := row.Scan(
+        &a.ID, &a.ActivityID, &startTime, &a.ActivityType,
+        &a.Duration, &a.Distance, &a.MaxHeartRate, &a.AvgHeartRate,
+        &a.AvgPower, &a.Calories, &a.Steps, &a.ElevationGain,
+        &a.StartLatitude, &a.StartLongitude,
+        &a.Filename, &a.FileType, &a.FileSize, &a.Downloaded,
+        &createdAt, &lastSync,
+    )
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, fmt.Errorf("activity not found")
+        }
+        return nil, err
+    }
+    
+    // Parse time strings
+    if a.StartTime, err = time.Parse("2006-01-02 15:04:05", startTime); err != nil {
+        return nil, err
+    }
+    if a.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt); err != nil {
+        return nil, err
+    }
+    if a.LastSync, err = time.Parse("2006-01-02 15:04:05", lastSync); err != nil {
+        return nil, err
+    }
+    
+    return &a, nil
+}
+
+func (s *SQLiteDB) CreateActivity(activity *Activity) error {
+	query := `
+	INSERT INTO activities (
+		activity_id, start_time, activity_type, duration, distance,
+		max_heart_rate, avg_heart_rate, avg_power, calories,
+		steps, elevation_gain, start_latitude, start_longitude,
+		filename, file_type, file_size, downloaded
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     
     _, err := s.db.Exec(query,
-        activity.ActivityID, activity.StartTime.Format("2006-01-02 15:04:05"),
-        activity.ActivityType, activity.Duration, activity.Distance,
-        activity.MaxHeartRate, activity.AvgHeartRate, activity.AvgPower,
-        activity.Calories, activity.Filename, activity.FileType,
-        activity.FileSize, activity.Downloaded,
+	activity.ActivityID, activity.StartTime.Format("2006-01-02 15:04:05"),
+	activity.ActivityType, activity.Duration, activity.Distance,
+	activity.MaxHeartRate, activity.AvgHeartRate, activity.AvgPower,
+	activity.Calories, activity.Steps, activity.ElevationGain,
+	activity.StartLatitude, activity.StartLongitude,
+	activity.Filename, activity.FileType,
+	activity.FileSize, activity.Downloaded,
     )
     
     return err
 }
 
 func (s *SQLiteDB) UpdateActivity(activity *Activity) error {
-    query := `
-    UPDATE activities SET 
-        activity_type = ?, duration = ?, distance = ?,
-        max_heart_rate = ?, avg_heart_rate = ?, avg_power = ?,
-        calories = ?, filename = ?, file_type = ?, file_size = ?,
-        downloaded = ?, last_sync = CURRENT_TIMESTAMP
-    WHERE activity_id = ?`
+	query := `
+	UPDATE activities SET 
+		activity_type = ?, duration = ?, distance = ?,
+		max_heart_rate = ?, avg_heart_rate = ?, avg_power = ?,
+		calories = ?, steps = ?, elevation_gain = ?,
+		start_latitude = ?, start_longitude = ?,
+		filename = ?, file_type = ?, file_size = ?,
+		downloaded = ?, last_sync = CURRENT_TIMESTAMP
+	WHERE activity_id = ?`
     
     _, err := s.db.Exec(query,
-        activity.ActivityType, activity.Duration, activity.Distance,
-        activity.MaxHeartRate, activity.AvgHeartRate, activity.AvgPower,
-        activity.Calories, activity.Filename, activity.FileType,
-        activity.FileSize, activity.Downloaded, activity.ActivityID,
+		activity.ActivityType, activity.Duration, activity.Distance,
+		activity.MaxHeartRate, activity.AvgHeartRate, activity.AvgPower,
+		activity.Calories, activity.Steps, activity.ElevationGain,
+		activity.StartLatitude, activity.StartLongitude,
+		activity.Filename, activity.FileType,
+		activity.FileSize, activity.Downloaded, activity.ActivityID,
     )
     
     return err
@@ -177,9 +234,10 @@ func (s *SQLiteDB) GetStats() (*Stats, error) {
 
 func (s *SQLiteDB) FilterActivities(filters ActivityFilters) ([]Activity, error) {
     query := `
-    SELECT id, activity_id, start_time, activity_type, duration, distance, 
-           max_heart_rate, avg_heart_rate, avg_power, calories, filename, 
-           file_type, file_size, downloaded, created_at, last_sync
+	SELECT id, activity_id, start_time, activity_type, duration, distance, 
+		   max_heart_rate, avg_heart_rate, avg_power, calories, steps, 
+		   elevation_gain, start_latitude, start_longitude,
+		   filename, file_type, file_size, downloaded, created_at, last_sync
     FROM activities WHERE 1=1`
     
     var args []interface{}
@@ -257,10 +315,12 @@ func (s *SQLiteDB) FilterActivities(filters ActivityFilters) ([]Activity, error)
         var startTime, createdAt, lastSync string
         
         err := rows.Scan(
-            &a.ID, &a.ActivityID, &startTime, &a.ActivityType,
-            &a.Duration, &a.Distance, &a.MaxHeartRate, &a.AvgHeartRate,
-            &a.AvgPower, &a.Calories, &a.Filename, &a.FileType,
-            &a.FileSize, &a.Downloaded, &createdAt, &lastSync,
+		&a.ID, &a.ActivityID, &startTime, &a.ActivityType,
+		&a.Duration, &a.Distance, &a.MaxHeartRate, &a.AvgHeartRate,
+		&a.AvgPower, &a.Calories, &a.Steps, &a.ElevationGain,
+		&a.StartLatitude, &a.StartLongitude,
+		&a.Filename, &a.FileType, &a.FileSize, &a.Downloaded,
+		&createdAt, &lastSync,
         )
         if err != nil {
             return nil, err
@@ -279,4 +339,9 @@ func (s *SQLiteDB) FilterActivities(filters ActivityFilters) ([]Activity, error)
 
 func (s *SQLiteDB) Close() error {
     return s.db.Close()
+}
+
+// NewSQLiteDBFromDB wraps an existing sql.DB connection
+func NewSQLiteDBFromDB(db *sql.DB) *SQLiteDB {
+	return &SQLiteDB{db: db}
 }

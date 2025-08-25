@@ -1,0 +1,35 @@
+{{define "title"}}Dashboard{{end}}
+
+{{define "content"}}
+<article>
+    <h1>Activity Dashboard</h1>
+    
+    <div class="stats-grid">
+        <div class="card">
+            <header>Total Activities</header>
+            <h2>{{.Total}}</h2>
+        </div>
+        <div class="card">
+            <header>Downloaded</header>
+            <h2>{{.Downloaded}}</h2>
+        </div>
+        <div class="card">
+            <header>Missing</header>
+            <h2>{{.Missing}}</h2>
+        </div>
+    </div>
+    
+    <div class="grid">
+        <a href="/sync" role="button" class="secondary">Sync Now</a>
+        <a href="/activities" role="button">View Activities</a>
+    </div>
+</article>
+
+<article>
+    <h2>Recent Activities</h2>
+    {{/* Will be replaced by HTMX */}}
+    <div id="recent-activities" hx-get="/partials/recent_activities" hx-trigger="load">
+        Loading...
+    </div>
+</article>
+{{end}}

@@ -39,6 +39,14 @@ type GarminActivity struct {
     AvgHR            int                    `json:"avgHR"`
     AvgPower         float64                `json:"avgPower"`
     Calories         int                    `json:"calories"`
+    StartLatitude    float64                `json:"startLatitude"`
+    StartLongitude   float64                `json:"startLongitude"`
+    Steps            int                    `json:"steps"`
+    ElevationGain    float64                `json:"elevationGain"`
+    ElevationLoss    float64                `json:"elevationLoss"`
+    AvgTemperature   float64                `json:"avgTemperature"`
+    MinTemperature   float64                `json:"minTemperature"`
+    MaxTemperature   float64                `json:"maxTemperature"`
 }
 
 func NewClient() *Client {
@@ -245,6 +253,14 @@ func (c *Client) GetActivityDetails(activityID int) (*GarminActivity, error) {
     var activity GarminActivity
     if err := json.NewDecoder(resp.Body).Decode(&activity); err != nil {
         return nil, err
+    }
+
+    // Extract activity type from map if possible
+    if typeKey, ok := activity.ActivityType["typeKey"].(string); ok {
+        activity.ActivityType = map[string]interface{}{"typeKey": typeKey}
+    } else {
+        // Default to empty map if typeKey not found
+        activity.ActivityType = map[string]interface{}{}
     }
     
     // Rate limiting

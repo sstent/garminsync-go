@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  garminsync:
+    build: .
+    container_name: garminsync
+    ports:
+      - "8888:8888"
+    environment:
+      - GARMIN_EMAIL=${GARMIN_EMAIL}
+      - GARMIN_PASSWORD=${GARMIN_PASSWORD}
+      - DATA_DIR=/data
+      - DB_PATH=/data/garmin.db
+      - TEMPLATE_DIR=/app/internal/web/templates
+    volumes:
+      - ./data:/data
+      - ./internal/web/templates:/app/internal/web/templates
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 30s  # Increased timeout for startup
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
