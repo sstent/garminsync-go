@@ -1,6 +1,7 @@
 import os
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
+import io
 from garminconnect import Garmin
 import logging
 
@@ -75,6 +76,26 @@ def get_activity_details(activity_id):
         return jsonify(activity)
     except Exception as e:
         logger.error(f"Error fetching activity details: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/activities/<activity_id>/download', methods=['GET'])
+def download_activity(activity_id):
+    """Endpoint to download activity data."""
+    api = init_api()
+    if not api:
+        return jsonify({"error": "Failed to connect to Garmin API"}), 500
+        
+    try:
+        format = request.args.get('format', 'fit')  # Default to FIT format
+        file_data = api.download_activity(activity_id, format=format)
+        return send_file(
+            io.BytesIO(file_data),
+            mimetype='application/octet-stream',
+            as_attachment=True,
+            download_name=f'activity_{activity_id}.{format}'
+        )
+    except Exception as e:
+        logger.error(f"Error downloading activity: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])

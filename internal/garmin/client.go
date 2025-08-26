@@ -105,9 +105,26 @@ func (c *Client) GetActivities(start, limit int) ([]GarminActivity, error) {
 
 // Helper function removed - no longer needed
 
-// DownloadActivity downloads an activity from Garmin Connect (stub implementation)
+// DownloadActivity downloads an activity via the Python API wrapper
 func (c *Client) DownloadActivity(activityID int, format string) ([]byte, error) {
-	return nil, fmt.Errorf("DownloadActivity not implemented - use Python API")
+    url := fmt.Sprintf("%s/activities/%d/download?format=%s", c.baseURL, activityID, format)
+    
+    req, err := http.NewRequest("GET", url, nil)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+    }
+    
+    return io.ReadAll(resp.Body)
 }
 
 // GetActivityDetails retrieves details for a specific activity from the Python API wrapper
