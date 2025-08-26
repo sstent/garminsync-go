@@ -27,25 +27,51 @@ func NewSyncService(garminClient *garmin.Client, db *database.SQLiteDB, dataDir 
 }
 
 func (s *SyncService) FullSync(ctx context.Context) error {
-	fmt.Println("Starting full sync...")
-	defer fmt.Println("Sync completed")
+	fmt.Println("=== Starting full sync ===")
+	defer fmt.Println("=== Sync completed ===")
+
+	// Check credentials first
+	email := os.Getenv("GARMIN_EMAIL")
+	password := os.Getenv("GARMIN_PASSWORD")
+	
+	if email == "" || password == "" {
+		return fmt.Errorf("Missing credentials - GARMIN_EMAIL: '%s', GARMIN_PASSWORD: %s", 
+			email, 
+			map[bool]string{true: "SET", false: "EMPTY"}[password != ""])
+	}
+	
+	fmt.Printf("Using credentials - Email: %s, Password: %s\n", email, 
+		map[bool]string{true: "***SET***", false: "EMPTY"}[password != ""])
 
 	// 1. Fetch activities from Garmin
-	activities, err := s.garminClient.GetActivities(0, 100)
+	fmt.Println("Fetching activities from Garmin Connect...")
+	activities, err := s.garminClient.GetActivities(0, 10) // Start with just 10 for testing
 	if err != nil {
 		return fmt.Errorf("failed to get activities: %w", err)
 	}
-	fmt.Printf("Found %d activities\n", len(activities))
+	
+	fmt.Printf("✅ Found %d activities from Garmin\n", len(activities))
+	
+	if len(activities) == 0 {
+		fmt.Println("⚠️ No activities returned - this might be expected if:")
+		fmt.Println("   - Your Garmin account has no activities")
+		fmt.Println("   - The API response format changed")
+		fmt.Println("   - Authentication succeeded but data access failed")
+		return nil
+	}
 
 	// 2. Process each activity
-	for _, activity := range activities {
+	for i, activity := range activities {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			fmt.Printf("Processing activity %d...\n", activity.ActivityID)
+			fmt.Printf("[%d/%d] Processing activity %d (%s)...\n", 
+				i+1, len(activities), activity.ActivityID, activity.ActivityName)
 			if err := s.syncActivity(&activity); err != nil {
-				fmt.Printf("Error syncing activity: %v\n", err)
+				fmt.Printf("❌ Error syncing activity %d: %v\n", activity.ActivityID, err)
+			} else {
+				fmt.Printf("✅ Successfully synced activity %d\n", activity.ActivityID)
 			}
 		}
 	}
