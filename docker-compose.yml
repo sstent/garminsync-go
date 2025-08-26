@@ -7,19 +7,35 @@ services:
     ports:
       - "8888:8888"
     env_file:
-      - .env  # Use the root .env file
+      - .env
     volumes:
       - ./data:/data
       - ./internal/web/templates:/app/internal/web/templates
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
+    depends_on:
+      - garmin-api
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8888/health"]
       interval: 30s
-      timeout: 30s  # Increased timeout for startup
+      timeout: 30s
       retries: 3
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+  garmin-api:
+    build: ./garmin-api-wrapper
+    container_name: garmin-api
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
