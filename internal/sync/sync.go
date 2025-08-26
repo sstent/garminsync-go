@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"strings"
 
 	"github.com/sstent/garminsync-go/internal/database"
 	"github.com/sstent/garminsync-go/internal/garmin"
@@ -26,18 +27,46 @@ func NewSyncService(garminClient *garmin.Client, db *database.SQLiteDB, dataDir 
 	}
 }
 
+func (s *SyncService) testAPIConnectivity() error {
+    // Try a simple API call to check connectivity
+    _, err := s.garminClient.GetActivities(0, 1)
+    if err != nil {
+        // Analyze error for troubleshooting hints
+        if strings.Contains(err.Error(), "connection refused") {
+            return fmt.Errorf("API connection failed: service might not be running. Verify garmin-api container is up. Original error: %w", err)
+        } else if strings.Contains(err.Error(), "timeout") {
+            return fmt.Errorf("API connection timeout: service might be slow to start. Original error: %w", err)
+        } else if strings.Contains(err.Error(), "status 5") {
+            return fmt.Errorf("API server error: check garmin-api logs. Original error: %w", err)
+        }
+        return fmt.Errorf("API connectivity test failed: %w", err)
+    }
+    return nil
+}
+
 func (s *SyncService) FullSync(ctx context.Context) error {
-	fmt.Println("=== Starting full sync ===")
-	defer fmt.Println("=== Sync completed ===")
+    fmt.Println("=== Starting full sync ===")
+    defer fmt.Println("=== Sync completed ===")
+    
+    // Check API connectivity before proceeding
+    if err := s.testAPIConnectivity(); err != nil {
+        return fmt.Errorf("API connectivity test failed: %w", err)
+    }
+    fmt.Println("✅ API connectivity verified")
 
 	// Check credentials first
 	email := os.Getenv("GARMIN_EMAIL")
 	password := os.Getenv("GARMIN_PASSWORD")
 	
 	if email == "" || password == "" {
-		return fmt.Errorf("Missing credentials - GARMIN_EMAIL: '%s', GARMIN_PASSWORD: %s", 
-			email, 
-			map[bool]string{true: "SET", false: "EMPTY"}[password != ""])
+        errorMsg := fmt.Sprintf("Missing credentials - GARMIN_EMAIL: '%s', GARMIN_PASSWORD: %s", 
+            email, 
+            map[bool]string{true: "SET", false: "EMPTY"}[password != ""])
+        errorMsg += "\nTroubleshooting:"
+        errorMsg += "\n1. Ensure the .env file exists with GARMIN_EMAIL and GARMIN_PASSWORD"
+        errorMsg += "\n2. Verify docker-compose.yml mounts the .env file"
+        errorMsg += "\n3. Check container env vars: docker-compose exec garminsync env | grep GARMIN"
+        return fmt.Errorf(errorMsg)
 	}
 	
 	fmt.Printf("Using credentials - Email: %s, Password: %s\n", email, 

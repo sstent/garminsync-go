@@ -42,7 +42,7 @@ ENV TZ=UTC \
     DB_PATH=/data/garmin.db
 
 # Create data volume and set permissions
-RUN mkdir /data && chown nobody:nobody /data
+RUN mkdir -p /data/activities && chown -R nobody:nobody /data
 VOLUME /data
 
 # Run as non-root user

@@ -1,9 +1,10 @@
 import os
 import json
+import time
+import logging
 from flask import Flask, request, jsonify, send_file
 import io
 from garminconnect import Garmin
-import logging
 
 app = Flask(__name__)
 
@@ -11,20 +12,33 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+# Global API client
+api = None
+last_init_time = 0
+init_retry_interval = 60  # seconds
+
 # Environment variables
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD")
 
 def init_api():
-    """Initializes the Garmin API client."""
+    """Initializes the Garmin API client (with retries)."""
+    global api, last_init_time
+    if api and time.time() - last_init_time < init_retry_interval:
+        return api
+    
     try:
-        api = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
-        api.login()
+        new_api = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
+        new_api.login()
+        api = new_api
+        last_init_time = time.time()
         logger.info("Successfully authenticated with Garmin API")
         return api
     except Exception as e:
         logger.error(f"Error initializing Garmin API: {e}")
-        return None
+        if not api:
+            logger.critical("Critical: API initialization failed")
+        return api
 
 @app.route('/stats', methods=['GET'])
 def get_stats():
@@ -100,8 +114,15 @@ def download_activity(activity_id):
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint."""
-    return jsonify({"status": "healthy", "service": "garmin-api"})
+    """Health check endpoint with authentication status."""
+    if api:
+        return jsonify({"status": "healthy", "auth_status": "authenticated", "service": "garmin-api"}), 200
+    else:
+        # Attempt to reinitialize if not tried recently
+        init_api()
+        if api:
+            return jsonify({"status": "healthy", "auth_status": "reauthenticated", "service": "garmin-api"}), 200
+        return jsonify({"status": "unhealthy", "auth_status": "unauthenticated", "service": "garmin-api"}), 503
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081)
