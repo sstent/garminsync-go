@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GarminSync Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 2rem;
+            background: var(--card-background-color);
+            border-radius: var(--border-radius);
+        }
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .activity-table {
+            margin-top: 2rem;
+        }
+        .sync-button {
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1>🏃 GarminSync Dashboard</h1>
+            <p>Sync and manage your Garmin Connect activities</p>
+        </header>
+
+        <!-- Stats Section -->
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="total-activities">-</div>
+                <div>Total Activities</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="downloaded-activities">-</div>
+                <div>Downloaded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="missing-activities">-</div>
+                <div>Missing Files</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="sync-button">
+            <button id="sync-btn" onclick="triggerSync()">🔄 Sync Now</button>
+            <span id="sync-status"></span>
+        </div>
+
+        <!-- Activities Table -->
+        <div class="activity-table">
+            <h2>Recent Activities</h2>
+            <table id="activities-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Duration</th>
+                        <th>Distance</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="activities-tbody">
+                    <tr><td colspan="5">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadActivities();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadStats, 30000);
+        });
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                document.getElementById('total-activities').textContent = stats.total || 0;
+                document.getElementById('downloaded-activities').textContent = stats.downloaded || 0;
+                document.getElementById('missing-activities').textContent = stats.missing || 0;
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Load activities
+        async function loadActivities() {
+            try {
+                const response = await fetch('/api/activities?limit=10');
+                const activities = await response.json();
+                
+                const tbody = document.getElementById('activities-tbody');
+                if (activities && activities.length > 0) {
+                    tbody.innerHTML = activities.map(activity => `
+                        <tr>
+                            <td>${new Date(activity.start_time).toLocaleDateString()}</td>
+                            <td>${activity.activity_type || '-'}</td>
+                            <td>${formatDuration(activity.duration)}</td>
+                            <td>${formatDistance(activity.distance)}</td>
+                            <td>${activity.downloaded ? '✅ Downloaded' : '⏳ Pending'}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5">No activities found</td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load activities:', error);
+                document.getElementById('activities-tbody').innerHTML = 
+                    '<tr><td colspan="5">Error loading activities</td></tr>';
+            }
+        }
+
+        // Trigger sync
+        async function triggerSync() {
+            const btn = document.getElementById('sync-btn');
+            const status = document.getElementById('sync-status');
+            
+            btn.disabled = true;
+            btn.textContent = '🔄 Syncing...';
+            status.textContent = 'Sync in progress...';
+            
+            try {
+                const response = await fetch('/api/sync', { method: 'POST' });
+                
+                if (response.ok) {
+                    status.textContent = 'Sync completed!';
+                    status.style.color = 'green';
+                    
+                    // Refresh data after sync
+                    setTimeout(() => {
+                        loadStats();
+                        loadActivities();
+                    }, 2000);
+                } else {
+                    throw new Error('Sync failed');
+                }
+            } catch (error) {
+                status.textContent = 'Sync failed: ' + error.message;
+                status.style.color = 'red';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Sync Now';
+                
+                // Clear status after 5 seconds
+                setTimeout(() => {
+                    status.textContent = '';
+                    status.style.color = '';
+                }, 5000);
+            }
+        }
+
+        // Helper functions
+        function formatDuration(seconds) {
+            if (!seconds) return '-';
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        }
+
+        function formatDistance(meters) {
+            if (!meters) return '-';
+            return (meters / 1000).toFixed(2) + ' km';
+        }
+    </script>
+</body>
+</html>
