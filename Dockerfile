@@ -24,8 +24,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o garminsync .
 # Runtime stage
 FROM alpine:3.18
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+# Install runtime dependencies (wget needed for healthcheck)
+RUN apk add --no-cache ca-certificates tzdata wget sqlite
 
 # Create app directory
 WORKDIR /app
@@ -33,14 +33,13 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/garminsync /app/garminsync
 
-# Copy templates
-COPY internal/web/templates ./internal/web/templates
+# Copy web directory (frontend assets)
+COPY web ./web
 
 # Set timezone and environment
 ENV TZ=UTC \
     DATA_DIR=/data \
-    DB_PATH=/data/garmin.db \
-    TEMPLATE_DIR=/app/internal/web/templates
+    DB_PATH=/data/garmin.db
 
 # Create data volume and set permissions
 RUN mkdir /data && chown nobody:nobody /data

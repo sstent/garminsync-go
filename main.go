@@ -84,14 +84,7 @@ func (app *App) init() error {
 
 	// Setup HTTP server
 	webHandler := web.NewWebHandler(app.db, app.syncService, app.garmin)
-	templateDir := os.Getenv("TEMPLATE_DIR")
-	if templateDir == "" {
-		templateDir = "./internal/web/templates"
-	}
-	if err := webHandler.LoadTemplates(templateDir); err != nil {
-		return fmt.Errorf("failed to load templates: %w", err)
-	}
-
+	// We've removed template loading since we're using static frontend
 	app.server = &http.Server{
 		Addr:    ":8888",
 		Handler: app.setupRoutes(webHandler),
@@ -183,13 +176,39 @@ func initDatabase() (*database.SQLiteDB, error) {
 func (app *App) setupRoutes(webHandler *web.WebHandler) http.Handler {
 	router := gin.Default()
 	
+	// Add middleware
+	router.Use(gin.Logger())   // Log all requests
+	router.Use(gin.Recovery()) // Recover from any panics
+
+	// Enable CORS for development
+	router.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
+	
+	// Serve static files
+	router.Static("/static", "./web/static")
+	router.LoadHTMLFiles("web/index.html")
+	
+	// API routes
+	api := router.Group("/api")
+	webHandler.RegisterRoutes(api)
+	
+	// Serve main page
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
+	})
+	
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	})
-	
-	// Register web routes
-	webHandler.RegisterRoutes(router)
 	
 	return router
 }

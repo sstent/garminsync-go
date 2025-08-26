@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -15,7 +16,6 @@ type WebHandler struct {
 	db       *database.SQLiteDB
 	syncer   *sync.SyncService
 	garmin   *garmin.Client
-	templates map[string]interface{} // Placeholder for template handling
 }
 
 func NewWebHandler(db *database.SQLiteDB, syncer *sync.SyncService, garmin *garmin.Client) *WebHandler {
@@ -23,30 +23,22 @@ func NewWebHandler(db *database.SQLiteDB, syncer *sync.SyncService, garmin *garm
 		db:       db,
 		syncer:   syncer,
 		garmin:   garmin,
-		templates: make(map[string]interface{}),
 	}
 }
 
-func (h *WebHandler) LoadTemplates(templateDir string) error {
-	// For now, just return nil - templates will be handled later
-	return nil
-}
-
-func (h *WebHandler) RegisterRoutes(router *gin.Engine) {
-	router.GET("/", h.Index)
+func (h *WebHandler) RegisterRoutes(router *gin.RouterGroup) {
+	router.GET("/stats", h.GetStats)
 	router.GET("/activities", h.ActivityList)
 	router.GET("/activities/:id", h.ActivityDetail)
 	router.POST("/sync", h.Sync)
 }
 
-func (h *WebHandler) Index(c *gin.Context) {
+func (h *WebHandler) GetStats(c *gin.Context) {
 	stats, err := h.db.GetStats()
 	if err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get stats"})
 		return
 	}
-	
-	// Placeholder for template rendering
 	c.JSON(http.StatusOK, stats)
 }
 
@@ -60,7 +52,7 @@ func (h *WebHandler) ActivityList(c *gin.Context) {
 	
 	activities, err := h.db.GetActivities(limit, offset)
 	if err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get activities"})
 		return
 	}
 	
@@ -70,13 +62,13 @@ func (h *WebHandler) ActivityList(c *gin.Context) {
 func (h *WebHandler) ActivityDetail(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.AbortWithStatus(http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity ID"})
 		return
 	}
 	
 	activity, err := h.db.GetActivity(id)
 	if err != nil {
-		c.AbortWithStatus(http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Activity not found"})
 		return
 	}
 	
@@ -84,11 +76,12 @@ func (h *WebHandler) ActivityDetail(c *gin.Context) {
 }
 
 func (h *WebHandler) Sync(c *gin.Context) {
-	err := h.syncer.Sync(context.Background())
-	if err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
+	go func() {
+		err := h.syncer.Sync(context.Background())
+		if err != nil {
+			log.Printf("Sync error: %v", err)
+		}
+	}()
 	
-	c.Status(http.StatusOK)
+	c.JSON(http.StatusOK, gin.H{"status": "sync_started", "message": "Sync started in background"})
 }

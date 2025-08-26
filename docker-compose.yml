@@ -6,12 +6,8 @@ services:
     container_name: garminsync
     ports:
       - "8888:8888"
-    environment:
-      - GARMIN_EMAIL=${GARMIN_EMAIL}
-      - GARMIN_PASSWORD=${GARMIN_PASSWORD}
-      - DATA_DIR=/data
-      - DB_PATH=/data/garmin.db
-      - TEMPLATE_DIR=/app/internal/web/templates
+    env_file:
+      - .env  # Use the root .env file
     volumes:
       - ./data:/data
       - ./internal/web/templates:/app/internal/web/templates
