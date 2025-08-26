@@ -94,14 +94,28 @@ def get_activity_details(activity_id):
 
 @app.route('/activities/<activity_id>/download', methods=['GET'])
 def download_activity(activity_id):
-    """Endpoint to download activity data."""
+    """Endpoint to download activity data with retry logic."""
     api = init_api()
     if not api:
         return jsonify({"error": "Failed to connect to Garmin API"}), 500
         
     try:
         format = request.args.get('format', 'fit')  # Default to FIT format
-        file_data = api.download_activity(activity_id, format=format)
+        file_data = None
+        
+        # Implement exponential backoff retry (1s, 2s, 4s)
+        for attempt in range(3):
+            try:
+                file_data = api.download_activity(activity_id, dl_fmt=format)
+                break  # Success, break out of retry loop
+            except Exception as e:
+                wait = 2 ** attempt
+                logger.warning(f"Download attempt {attempt+1}/3 failed, retrying in {wait}s: {str(e)}")
+                time.sleep(wait)
+        
+        if file_data is None:
+            return jsonify({"error": "Activity download failed after 3 attempts"}), 500
+            
         return send_file(
             io.BytesIO(file_data),
             mimetype='application/octet-stream',

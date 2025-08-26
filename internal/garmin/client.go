@@ -147,24 +147,9 @@ func (c *Client) DownloadActivity(activityID int, format string) ([]byte, error)
 		return nil, err
 	}
 
-	var resp *http.Response
-	reqErr := error(nil)
-
-	for i := 0; i <= c.retries; i++ {
-		resp, reqErr = c.httpClient.Do(req)
-		if reqErr != nil || (resp != nil && resp.StatusCode >= 500) {
-			if i < c.retries {
-				backoff := time.Duration(math.Pow(2, float64(i))) * time.Second
-				log.Printf("Download failed (attempt %d/%d), retrying in %v: %v", i+1, c.retries, backoff, reqErr)
-				time.Sleep(backoff)
-				continue
-			}
-		}
-		break
-	}
-
-	if reqErr != nil {
-		return nil, fmt.Errorf("download failed after %d retries: %w", c.retries, reqErr)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
 
